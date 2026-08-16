@@ -21,10 +21,13 @@ command fails to find the scripts.
   state.json                     # stage status, meta, log  (managed by paper_state.py)
   library.json                   # retrieved literature      (managed by litsearch.py)
   refs.bib                       # exported bibtex
+  experiments.json               # pre-registered protocols + change ledger (exp.py)
+  results/runs.jsonl             # append-only run log (exp.py)
   01-idea.md  02-related-work.md  03-benchmarks.md  04-methodology.md
-  05-challenges.md  06-alignment.md  07-refine.md
-  08-evolve/round-1.md ...
+  05-challenges.md  06-alignment.md  07-refine.md  08-implement.md  09-experiments.md
+  10-evolve/round-1.md ...
   draft/                         # paper draft (md and/or tex), created at stage 07
+  impl/                          # method + baselines + eval harness, created at stage 08
 ```
 
 ## Dispatch
@@ -56,7 +59,9 @@ per-stage procedure, output contract, and quality bar. Read
 | 05 | Challenges | `05-challenges.md` | Open problems, failure modes, the fallbacks SOTA relies on |
 | 06 | Alignment | `06-alignment.md` | Score the idea against each limitation; keep, sharpen, or pivot |
 | 07 | Refine | `07-refine.md` + `draft/` | Challenge → solution → benchmark triples → paper skeleton |
-| 08 | Self-evolve | `08-evolve/round-N.md` | Adversarial review rounds that feed back into 02–07 |
+| 08 | Implement | `08-implement.md` + `impl/` | Harness + baselines + ablation flags; reproduce a baseline first |
+| 09 | Experiments | `09-experiments.md` + `results/` | Pre-registered runs, ≥3 seeds, ablations, statistical verdicts |
+| 10 | Self-evolve | `10-evolve/round-N.md` | Two loops — argument review + metric improvement — feeding back into 02–09 |
 
 Mark stages complete as you go — the gate is not decorative, it is how a later
 session knows what to trust:
@@ -89,6 +94,27 @@ is not a literature review. Then use WebFetch on the handful of papers that
 actually matter — abstracts alone cannot support a claim about a method's
 mechanism or a benchmark's protocol.
 
+## Experiments
+
+Stages 08–10 run and improve real experiments. Every run goes through the
+tracker — a metric that is not in `results/runs.jsonl` cannot enter the paper.
+
+```bash
+EX="python3 $SKILL_DIR/scripts/exp.py --workspace <ws>"
+$EX register main --hypothesis "..." --metric accuracy --dataset X --seeds 5 --success "+2.0 on dev"
+$EX log main --metric accuracy=0.83 --seed 1 --split dev --config ctx=8192 --cost "1.4 GPU-h"
+$EX table --metric accuracy --split dev      # mean ± sd, 95% CI, flags n<3
+$EX compare baseline ours --metric accuracy  # noise band, Cohen's d, permutation p, verdict
+$EX attempt --round 2 --change "..." --predicted "+1.5" --observed "+0.4" --verdict reject
+$EX ledger ; $EX status                      # attempts kept/rejected; test-eval budget
+```
+
+Non-negotiables, because they are what make the numbers mean anything:
+**register the protocol and its success threshold before running**; **≥3 seeds
+per arm** (single-seed numbers are not results); **tune on dev, touch test once**;
+and let `compare` decide — a gain inside the seed-noise band is not an
+improvement, however much you want it to be.
+
 ## Rules
 
 - **Cite or mark.** Every factual claim about prior work carries a citation key
@@ -99,8 +125,12 @@ mechanism or a benchmark's protocol.
 - **The idea may lose.** Stage 06 is allowed to conclude the idea is subsumed by
   existing work. Report that plainly and offer the nearest surviving variant —
   do not quietly re-scope it into something defensible and call it the original.
-- **Numbers come from sources.** Benchmark results are copied with a citation,
-  never estimated. Proposed experiments are labeled as planned, not as results.
+- **Numbers come from sources or from runs.** Published results are copied with a
+  citation; measured results come from `runs.jsonl` with seeds and a commit.
+  Never estimate, interpolate, or "expect" a number into a table — planned
+  experiments stay labeled as planned until they have run.
+- **Failed experiments stay.** A hypothesis that missed its registered threshold
+  is reported, not deleted or re-described as a success at a different metric.
 - **Ask the user before pivoting the research direction** (stage 06 pivots, venue
   changes, dropping a contribution). Everything else is your call.
 - Write artifacts in the language the user is using.

@@ -212,8 +212,93 @@ shells exist, and the abstract + intro are written prose — not bullets.
 
 ---
 
-## 08-evolve — Self-evolve
+## 08-implement — Implementation & harness
 
-See `self-evolve.md`. In short: adversarial review rounds that score the draft,
-generate concrete actions, **reopen earlier stages** (`PS reopen 02-related-work`)
-to fix what they find, and repeat until the scorecard converges or the user stops.
+**Goal.** Working code for the method, the baselines, and — first — an evaluation
+harness you trust. Gains measured by an untrusted harness are not gains.
+
+**Procedure.**
+1. Scaffold `impl/`: `data/` (loaders + split logic), `methods/` (ours + baselines
+   behind one interface), `eval/` (metrics, exactly as the benchmark defines them),
+   `configs/`, `run.py`. One entry point, config-driven — ablations must be config
+   flags, not forked scripts, or the ablation table will not survive review.
+2. **Reproduce a baseline before writing the method.** Take a published number
+   from `03-benchmarks.md` and reproduce it within its reported variance. If you
+   cannot, the harness, the data, or the protocol is wrong — fix that first.
+   Record the reproduction gap explicitly; a systematic offset from published
+   numbers must be disclosed in the paper.
+3. Determinism: seed everything, log the seed, log the git commit, pin versions.
+   Two runs with the same config and seed must match, or the noise band is
+   uninterpretable.
+4. Smoke scale first: 1% of the data, 1 epoch, tiny model. Confirm the pipeline
+   produces plausible metrics end to end before spending real compute.
+5. Wire the ablation switches now — one flag per contribution triple from stage
+   07, so each contribution can be turned off independently.
+6. Cost model: measure one run's wall-clock and cost, multiply by planned runs ×
+   seeds. If that exceeds the user's resources, say so now and cut scope with
+   them — not after burning the budget.
+
+**Done when** a baseline is reproduced (or the gap is documented), the harness is
+deterministic under a fixed seed, each contribution has an ablation flag, and one
+end-to-end smoke run has produced a metric.
+
+Record what you built and what it cost in `08-implement.md`.
+
+---
+
+## 09-experiments — Experiments & results
+
+**Goal.** Evidence that decides the stage-07 triples. The rule that makes it
+evidence rather than anecdote: **register the protocol before you run it.**
+
+`EX` = `python3 $SKILL_DIR/scripts/exp.py --workspace <ws>`
+
+**Procedure.**
+1. Pre-register one protocol per contribution, *before* running:
+   ```
+   EX register main-c1 --hypothesis "retrieval-scored eviction beats recency at 8k ctx" \
+      --metric accuracy,latency --dataset LongBench --seeds 5 \
+      --success "+2.0 accuracy on dev vs strongest baseline, no >10% latency regression" \
+      --contribution C1
+   ```
+   The `--success` string is the paper's honesty anchor: it is what you agreed
+   counts as a win before you knew the answer.
+2. Run baselines and method across **≥3 seeds** (5 if a run is cheap), logging
+   every run:
+   ```
+   EX log main-c1 --metric accuracy=0.831 --seed 1 --split dev --config ctx=8192 --cost "1.4 GPU-h"
+   ```
+   Single-seed numbers are not results — `EX table` will flag them.
+3. Split discipline: tune on dev, and touch test only when the method is frozen.
+   `exp.py` counts test evaluations against a budget and warns when it is spent.
+   Every extra peek at test converts a measurement into a hyperparameter.
+4. Compare properly, never by eyeballing means:
+   ```
+   EX compare baseline-h2o ours --metric accuracy --split dev
+   ```
+   It reports the seed-noise band, Cohen's d, and a permutation p-value, and
+   refuses to call a gain inside the noise band an improvement. If the seed count
+   makes significance unreachable, it says so — add seeds rather than round up.
+5. Ablations: turn off one contribution flag at a time; the drop is that
+   contribution's evidence. A contribution whose ablation does not hurt has no
+   experimental support — report that, and consider dropping the claim.
+6. Fill the stage-07 table shells with `EX table --metric <m>`, replacing every
+   `TBD`. Baseline numbers you reproduced are marked as reproduced; numbers
+   copied from papers keep their citation.
+7. Failure analysis: where does the method still lose? Which inputs, which
+   regimes? This is stage-10 Loop B's input and the paper's limitations section.
+
+**Done when** every triple has a registered protocol, ≥3 seeds per arm, an
+ablation, mean ± sd in the tables, and a verdict per hypothesis — including
+hypotheses that failed. A failed hypothesis is a finding; deleting it is not an
+option.
+
+---
+
+## 10-evolve — Self-evolve
+
+See `self-evolve.md`. Two loops per round: **Loop A** reviews the argument
+(adversarial personas, scorecard) and **Loop B** improves the metrics
+(diagnose → hypothesize → implement → measure → accept/reject). Both convert
+findings into `PS reopen <stage>` work; the round ends when the artifacts have
+changed, not when the list is written.

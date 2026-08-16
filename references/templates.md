@@ -200,6 +200,77 @@ Dropped from the original idea: …
 
 ---
 
+## 08-implement.md
+
+```markdown
+# Implementation
+
+## Layout
+impl/{data,methods,eval,configs}/ + run.py — entry point, config-driven
+
+## Baseline reproduction (do this first)
+| Baseline | Published (cite) | Reproduced | Gap | Explanation |
+|----------|------------------|------------|-----|-------------|
+> A gap that is not explained is a harness bug, not a footnote.
+
+## Determinism
+Seeds set for: … | Versions pinned: … | Same-seed reruns match: yes/no
+Git commit at freeze: …
+
+## Ablation switches (one per contribution)
+| Contribution | Flag | Off = |
+|--------------|------|-------|
+
+## Smoke run
+scale: … | metric produced: … | wall-clock: …
+
+## Cost model
+per run: … × runs … × seeds … = **total**; available: … ; verdict: fits / must cut
+```
+
+---
+
+## 09-experiments.md
+
+```markdown
+# Experiments
+
+## Registered protocols
+| Name | Contribution | Hypothesis | Metric | Dataset | Seeds | Success threshold |
+|------|--------------|-----------|--------|---------|-------|-------------------|
+(registered with `exp.py register` BEFORE running)
+
+## Main results
+(paste `exp.py table --metric <m> --split dev`; test column filled once, at the end)
+
+| Method | Bench A ↑ | Bench B ↑ | Cost | Source |
+|--------|-----------|-----------|------|--------|
+| baseline [key] | 0.00 ± 0.00 | | | reproduced / reported [key] |
+| **Ours** | 0.00 ± 0.00 | | | this work, n=5 seeds |
+
+## Statistical verdicts
+(paste `exp.py compare <baseline> <ours> --metric <m>` per comparison)
+
+## Ablations
+| Variant | Δ vs full | Interpretation |
+|---------|-----------|----------------|
+> A contribution whose ablation doesn't hurt has no experimental support.
+
+## Hypothesis verdicts
+| Protocol | Success threshold | Result | Met? |
+|----------|-------------------|--------|------|
+> Failed hypotheses stay in this table.
+
+## Failure analysis
+Where the method still loses (regime, input type, %): …
+
+## Protocol disclosures
+seeds per arm: … | test evaluations used: __/__ | tuning budget: ours … vs baseline …
+| deviations from the registered protocol and why: …
+```
+
+---
+
 ## LaTeX skeleton (`draft/paper.tex`)
 
 Use when the user names a venue with a template; otherwise Markdown is fine.

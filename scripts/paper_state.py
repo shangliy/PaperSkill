@@ -25,9 +25,14 @@ STAGES = [
     ("05-challenges", "Challenges & limitations", "05-challenges.md"),
     ("06-alignment", "Idea/limitation alignment", "06-alignment.md"),
     ("07-refine", "Refinement & paper skeleton", "07-refine.md"),
-    ("08-evolve", "Self-evolve rounds", "08-evolve/"),
+    ("08-implement", "Implementation & harness", "08-implement.md"),
+    ("09-experiments", "Experiments & results", "09-experiments.md"),
+    ("10-evolve", "Self-evolve rounds", "10-evolve/"),
 ]
 STAGE_IDS = [s[0] for s in STAGES]
+EVOLVE = "10-evolve"
+# Workspaces created before the implement/experiments stages existed.
+RENAMED = {"08-evolve": "10-evolve"}
 
 
 def now():
@@ -70,7 +75,35 @@ def die(msg):
 
 def load(ws):
     with open(os.path.join(ws, "state.json")) as f:
-        return json.load(f)
+        state = json.load(f)
+    return migrate(ws, state)
+
+
+def migrate(ws, state):
+    """Bring an older workspace up to the current stage list, preserving progress."""
+    stages, changed = state.get("stages", {}), False
+    for old, new in RENAMED.items():
+        if old in stages:
+            stages[new] = stages.pop(old)
+            old_dir, new_dir = os.path.join(ws, old), os.path.join(ws, new)
+            if os.path.isdir(old_dir) and not os.path.exists(new_dir):
+                os.rename(old_dir, new_dir)
+            changed = True
+    for sid, name, path in STAGES:
+        if sid not in stages:
+            stages[sid] = {"status": "todo", "summary": "", "updated": ""}
+            changed = True
+            if not path.endswith("/"):
+                fp = os.path.join(ws, path)
+                if not os.path.exists(fp):
+                    with open(fp, "w") as f:
+                        f.write(STUB.format(title=name, stage=name, sid=sid))
+    if changed:
+        # keep declared order
+        state["stages"] = {sid: stages[sid] for sid in STAGE_IDS if sid in stages}
+        log(state, "migrated to stage list v2 (implement/experiments added)")
+        save(ws, state)
+    return state
 
 
 def save(ws, state):
@@ -106,8 +139,8 @@ def cmd_init(args):
     ws = os.path.join(root, "papers", slug)
     if os.path.isfile(os.path.join(ws, "state.json")):
         die("workspace already exists: %s (use `status` to resume)" % ws)
-    os.makedirs(os.path.join(ws, "08-evolve"), exist_ok=True)
-    os.makedirs(os.path.join(ws, "draft"), exist_ok=True)
+    for d in (EVOLVE, "draft", "impl", "results"):
+        os.makedirs(os.path.join(ws, d), exist_ok=True)
     state = {
         "slug": slug,
         "title": args.title,
@@ -232,9 +265,11 @@ def cmd_set(args):
 
 ROUND_STUB = """# Self-evolve round {n}
 
-_Opened {ts}. Procedure: `references/self-evolve.md`._
+_Opened {ts}. Procedure: `references/self-evolve.md`. Run BOTH loops._
 
-## Scorecard (1-5)
+## Loop A — argument review
+
+### Scorecard (1-5)
 
 | Axis | Score | Evidence |
 |------|-------|----------|
@@ -242,11 +277,29 @@ _Opened {ts}. Procedure: `references/self-evolve.md`._
 | Significance |  |  |
 | Soundness |  |  |
 | Evaluation fit |  |  |
+| Reproducibility |  |  |
 | Clarity |  |  |
 
-## Reviewer findings
+### Reviewer findings (R1 chair / R2 expert / R3 empiricist / R4 skeptic)
 
-## Actions (stage → what to redo)
+### Actions (stage -> what to redo)
+
+## Loop B — empirical improvement
+
+### Current standing
+| Metric | Baseline | Ours | Target | Gap |
+|--------|----------|------|--------|-----|
+
+### Diagnosis (where the metric is actually lost)
+
+### Attempts this round
+| # | Change | Predicted | Observed (dev, n seeds) | p / noise | Verdict |
+|---|--------|-----------|-------------------------|-----------|---------|
+
+_Record each with `exp.py attempt --round {n} ...` — rejected attempts included._
+
+### Budget
+Test-set evals used: __/__   |   Compute spent this round: __
 
 ## Verdict
 {verdict}
@@ -258,10 +311,10 @@ def cmd_round(args):
     state = load(ws)
     n = state.get("rounds", 0) + 1
     state["rounds"] = n
-    state["stages"]["08-evolve"]["status"] = "active"
-    state["stages"]["08-evolve"]["updated"] = now()
-    os.makedirs(os.path.join(ws, "08-evolve"), exist_ok=True)
-    fp = os.path.join(ws, "08-evolve", "round-%d.md" % n)
+    state["stages"][EVOLVE]["status"] = "active"
+    state["stages"][EVOLVE]["updated"] = now()
+    os.makedirs(os.path.join(ws, EVOLVE), exist_ok=True)
+    fp = os.path.join(ws, EVOLVE, "round-%d.md" % n)
     if not os.path.exists(fp):
         with open(fp, "w") as f:
             f.write(ROUND_STUB.format(n=n, ts=now(), verdict=args.verdict or ""))
